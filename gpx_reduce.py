@@ -2,11 +2,13 @@
 # -*- coding: utf8 -*-
 
 '''
-gpx_reduce v1.2: removes points from gpx-files to reduce filesize and
+gpx_reduce v1.4: removes points from gpx-files to reduce filesize and
 tries to keep introduced distortions to the track at a minimum.
-Copyright (C) 2011 travelling_salesman on OpenStreetMap
+Copyright (C) 2011,2012 travelling_salesman on OpenStreetMap
 
 changelog: v1.2: clarity refractoring + speedup for identical points
+           v1.3: new track weighting functions, progress display
+           v1.4: new track weighting function, restructuring for memory saving
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 import sys
+import time
 import pylab as pl
 import scipy as sc
 from math import *
@@ -32,6 +35,8 @@ from optparse import OptionParser
 
 
 parser = OptionParser('usage: %prog [options] input-file.gpx')
+parser.add_option('-v', '--verbose', action='store', type='int',
+    dest='verbose', default=1, help='verbose=[0,1]')
 parser.add_option('-p', '--plot', action='store_true', dest='plot',
     default=False, help='Show a plot of the result at the end.')
 parser.add_option('-d', '--dist', action='store', type='float', dest='max_dist',
@@ -40,7 +45,16 @@ parser.add_option('-o', '--out', action='store', type='string',
     dest='ofname', default=None, help='Output file name')
 parser.add_option('-m', '--maxsep', action='store', type='float', dest='max_sep',
     default=200.0, help='Maximum separation of points. No points will be deleted where the resulting distance would become greater than maxsep. Standard JOSM settings will not display points spaced more than 200m. Zero value means no limit.')
+parser.add_option('-w', '--weighting', action='store', type='string',
+    dest='weighting', default='mix',
+    help='''weighting function to be minimized for track reduction:
+pnum (number of points),
+sqrdistsum (number of points plus sum of squared distances to leftout points),
+sqrdistmax (number of points plus sum of squared distances to each maximally separated leftout point per new line segment),
+sqrlength (number of points plus sum of squared new line segment lengths normalized by maxsep),
+mix (number of points plus sum of squared distances to each maximally separated leftout point per new line segment weighted with corresponding segment length) = standard''')
 (options, args) = parser.parse_args()
+
 
 if len(args) < 1:
     parser.print_usage()
@@ -129,42 +143,74 @@ def reduced_track_indices(coordinate_list):
             points[-1]['weight'] += 1
     n = len(points)
     
-    # create lists of connections to all previous points
-    # and distances to intermediate points
-    points[0]['distances'] = {}
+    # progress printing initialisations
+    progress_printed = False
+    progress = None
+    tprint = time.time()
+    
+    # execute Dijkstra-like algorithm on points
+    points[0]['cost'] = 1.0
+    points[0]['prev'] = -1
+    
     for i2 in range(1, n):
-        points[i2]['distances'] = {i2-1:0.0}
-        for i1 in reversed(range(i2-1)):
+        penalties = {}
+        for i1 in reversed(range(i2)):
             p1 = sc.array(points[i1]['p'])
             p2 = sc.array(points[i2]['p'])
-            if 0.0 < options.max_sep and options.max_sep <= norm(p2 - p1):
+            seglength = norm(p2 - p1)
+            if (0.0 < options.max_sep and options.max_sep <= seglength
+                    and i1 != i2 - 1):
                 break # point separation is too far
+                # but always accept direct predecessor i1 = i2 - 1
             
+            distance_squaremax = 0.0
             distance_squaresum = 0.0
+            # iterate all medium points between i1 and i2
             # go through range(i1+1, i2) but start in the middle
             for im in range((i1-1+i2)/2, i1, -1) + range((i1+1+i2)/2, i2):
                 pm = sc.array(points[im]['p'])
                 d = distance(p1, pm, p2)
                 if (d <= options.max_dist):
-                    distance_squaresum += points[im]['weight'] * (d / options.max_dist) ** 2
+                    d_sq = (d / options.max_dist) ** 2
+                    distance_squaremax = max(distance_squaremax, d_sq)
+                    distance_squaresum += points[im]['weight'] * d_sq
                 else:
                     break
             else:
-                points[i2]['distances'][i1] = distance_squaresum
-    
-    # execute Dijkstra-like algorithm on points
-    points[0]['cost'] = 1.0
-    points[0]['prev'] = -1
-    for i in range(1, n):
+                if options.weighting == 'sqrdistmax':
+                    penalties[i1] = distance_squaremax
+                elif options.weighting == 'sqrdistsum':
+                    penalties[i1] = distance_squaresum
+                elif options.weighting == 'sqrlength':
+                    penalties[i1] = (seglength / options.max_sep) ** 2
+                elif options.weighting == 'mix':
+                    penalties[i1] = (distance_squaremax *
+                        (1.0 + seglength / options.max_sep))
+                else:
+                    penalties[i1] = 0.0
+        
+        # find best predecessor
         imin = None
         costmin = float('inf')
-        for prev, dist in (points[i]['distances']).iteritems():
-            cost = points[prev]['cost'] + 1.0 + dist
+        for prev, penalty in penalties.iteritems():
+            # cost function is sum of points used (1.0) plus penalties
+            cost = points[prev]['cost'] + 1.0 + penalty
             if cost < costmin:
                 imin = prev
                 costmin = cost
-        points[i]['cost'] = costmin
-        points[i]['prev'] = imin
+        points[i2]['cost'] = costmin
+        points[i2]['prev'] = imin
+        
+        # print progess
+        if options.verbose == 1 and (100 * i2) / n > progress and time.time() >= tprint + 1:
+            tprint = time.time()
+            progress = (100 * i2) / n
+            print '\r', progress, '%',
+            sys.stdout.flush()
+            progress_printed = True
+    
+    if progress_printed:
+        print '\r',
     
     # trace route backwards to collect final points
     final_pnums = []
