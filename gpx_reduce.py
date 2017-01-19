@@ -2,20 +2,22 @@
 # -*- coding: utf8 -*-
 
 '''
-gpx_reduce: removes points from gpx-files to reduce filesize and
+gpx_reduce v1.2: removes points from gpx-files to reduce filesize and
 tries to keep introduced distortions to the track at a minimum.
 Copyright (C) 2011 travelling_salesman on OpenStreetMap
- 
+
+changelog: v1.2: clarity refractoring + speedup for identical points
+
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
- 
+
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
- 
+
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
@@ -54,7 +56,8 @@ b = 6356752.314245179
 def norm(v):
     return sqrt(sum([i**2 for i in v]))
 
-def linedistance_position(p1, pm, p2):
+
+def distance(p1, pm, p2):
     # returns distance of pm from line between p1 and p2
     line = p2 - p1
     linel = norm(line)
@@ -64,16 +67,18 @@ def linedistance_position(p1, pm, p2):
     linem = line / linel
     
     position = pl.dot(vm, linem) / linel
-    distance = vm - line * position
-    
-    return norm(distance), position
+    if position < 0.0:
+        return norm(vm)
+    elif position > 1.0:
+        return norm(pm - p2)
+    else:
+        return norm(vm - line * position)
 
-def get_xyz(dicti):
-    return dicti['x'], dicti['y'], dicti['z']
 
 def rotate(x, y, phi):
     return x*cos(phi) - y*sin(phi), x*sin(phi) + y*cos(phi)
-    
+
+
 def project_to_meters(lat, lon, latm, lonm):
     # azimuthal map projection centered at average track coordinate
     lon -= lonm
@@ -85,12 +90,14 @@ def project_to_meters(lat, lon, latm, lonm):
     y_meters = -rE * cos(lon2) * (pi / 2.0 - lat2)
     return x_meters, y_meters
 
+
 def latlonele_to_xyz(lat, lon, ele):
     s = sin(radians(lat))
     c = cos(radians(lat))
     r = ele + a * b / norm([s*a, c*b])
     lon = radians(lon)
     return r * c * sin(lon), r * c * (-cos(lon)), r * s
+
 
 def xyz_to_latlonele(x, y, z):
     r = norm([x, y, z])
@@ -102,14 +109,80 @@ def xyz_to_latlonele(x, y, z):
     return lat, lon, ele
 
 
+def reduced_track_indices(coordinate_list):
+    # returns a list of indices of trackpoints that constitute the reduced track
+    # takes a list of kartesian coordinate tuples
+    m = len(coordinate_list)
+    if (m == 0): return []
+    
+    # number of dimensions
+    d = len(coordinate_list[0])
+    
+    # remove identical entries (can speed up algorithm considerably)
+    original_indices = [0]
+    points = [{'p': coordinate_list[0], 'weight':1}]
+    for i in range(1, m):
+        if False in [coordinate_list[i-1][j] == coordinate_list[i][j] for j in range(d)]:
+            original_indices.append(i)
+            points.append({'p': coordinate_list[i], 'weight':1})
+        else:
+            points[-1]['weight'] += 1
+    n = len(points)
+    
+    # create lists of connections to all previous points
+    # and distances to intermediate points
+    points[0]['distances'] = {}
+    for i2 in range(1, n):
+        points[i2]['distances'] = {i2-1:0.0}
+        for i1 in reversed(range(i2-1)):
+            p1 = sc.array(points[i1]['p'])
+            p2 = sc.array(points[i2]['p'])
+            if 0.0 < options.max_sep and options.max_sep <= norm(p2 - p1):
+                break # point separation is too far
+            
+            distance_squaresum = 0.0
+            # go through range(i1+1, i2) but start in the middle
+            for im in range((i1-1+i2)/2, i1, -1) + range((i1+1+i2)/2, i2):
+                pm = sc.array(points[im]['p'])
+                d = distance(p1, pm, p2)
+                if (d <= options.max_dist):
+                    distance_squaresum += points[im]['weight'] * (d / options.max_dist) ** 2
+                else:
+                    break
+            else:
+                points[i2]['distances'][i1] = distance_squaresum
+    
+    # execute Dijkstra-like algorithm on points
+    points[0]['cost'] = 1.0
+    points[0]['prev'] = -1
+    for i in range(1, n):
+        imin = None
+        costmin = float('inf')
+        for prev, dist in (points[i]['distances']).iteritems():
+            cost = points[prev]['cost'] + 1.0 + dist
+            if cost < costmin:
+                imin = prev
+                costmin = cost
+        points[i]['cost'] = costmin
+        points[i]['prev'] = imin
+    
+    # trace route backwards to collect final points
+    final_pnums = []
+    i = n-1
+    while i >= 0:
+        final_pnums = [i] + final_pnums
+        i = points[i]['prev']
+    
+    return [original_indices[i] for i in final_pnums]
 
+
+
+############################## main function #################################
 for fname in args:
     # initialisations
     tracksegs_old = []
     tracksegs_new = []
-    sumx = 0.0
-    sumy = 0.0
-    sumz = 0.0
+    sumx, sumy, sumz = 0.0, 0.0, 0.0
     
     # import xml data from files
     print 'opening file', fname
@@ -122,7 +195,6 @@ for fname in args:
         nsmap = '{' + gpx.nsmap[None] + '}'
     else:
         nsmap = ''
-                
     
     # extract data from xml
     for trkseg in gpx.findall('.//' + nsmap + 'trkseg'):
@@ -139,65 +211,19 @@ for fname in args:
             tracksegs_old.append([[lats[i], lons[i], eles[i]] for i in range(n)])
         
         # calculate projected points to work on
-        points = [{} for i in range(n)]
+        coords = []
         for i in range(n):
             x, y, z = latlonele_to_xyz(lats[i], lons[i], eles[i])
-            points[i]['x'] = x
-            points[i]['y'] = y
-            points[i]['z'] = z
+            coords.append((x, y, z))
             sumx += x
             sumy += y
             sumz += z
         
-        # create lists of connections to all previous points
-        # and distances to intermediate points
-        points[0]['distances'] = {}
-        for i2 in range(1, n):
-            points[i2]['distances'] = {i2-1:0.0}
-            for i1 in reversed(range(i2-1)):
-                p1 = sc.array(get_xyz(points[i1]))
-                p2 = sc.array(get_xyz(points[i2]))
-                if 0.0 < options.max_sep and options.max_sep <= norm(p2 - p1):
-                    break # point separation is too far
-                
-                ok = True
-                dlist = []
-                # go through range(i1+1, i2) but start in the middle
-                for im in range((i1-1+i2)/2, i1, -1) + range((i1+1+i2)/2, i2):
-                    pm = sc.array(get_xyz(points[im]))
-                    d, l = linedistance_position(p1, pm, p2)
-                    if (l >= 0.0 and l <= 1.0 and d <= options.max_dist):
-                        dlist.append(d)
-                    else:
-                        ok = False
-                        break
-                if ok:
-                    points[i2]['distances'][i1] = sum(
-                        [(i / options.max_dist)**2 for i in dlist])
-        
-        # execute routing algorithm on points
-        points[0]['cost'] = 1.0
-        points[0]['prev'] = -1
-        for i in range(1, n):
-            imin = None
-            costmin = float('inf')
-            for prev, dist in (points[i]['distances']).iteritems():
-                cost = points[prev]['cost'] + 1.0 + dist
-                if cost < costmin:
-                    imin = prev
-                    costmin = cost
-            points[i]['cost'] = costmin
-            points[i]['prev'] = imin
-        
-        # trace route backwards to collect final points
-        final_pnums = []
-        i = n-1
-        while i >= 0:
-            final_pnums = [i] + final_pnums
-            i = points[i]['prev']
+        # execute the reduction algorithm
+        final_pnums = reduced_track_indices(coords)
         
         n_new = len(final_pnums)
-        print 'number of points:', n, '-', n-n_new, '=', n_new
+        print 'number of points:', n, '-', n - n_new, '=', n_new
         
         # delete certain points from original data
         delete_pnums = [i for i in range(n) if i not in final_pnums]
@@ -209,8 +235,8 @@ for fname in args:
             tracksegs_new.append([
                 [float(trkpt.get('lat')), float(trkpt.get('lon')), float(trkpt.find(nsmap + 'ele').text)]
                 for trkpt in trkseg.findall(nsmap + 'trkpt')])
-    
         
+    
     # export data to file
     if options.ofname != None:
         ofname = options.ofname
