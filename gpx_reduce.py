@@ -2,13 +2,16 @@
 # -*- coding: utf8 -*-
 
 '''
-gpx_reduce v1.4: removes points from gpx-files to reduce filesize and
+gpx_reduce v1.7: removes points from gpx-files to reduce filesize and
 tries to keep introduced distortions to the track at a minimum.
-Copyright (C) 2011,2012 travelling_salesman on OpenStreetMap
+Copyright (C) 2011,2012,2013,2015 travelling_salesman on OpenStreetMap
 
 changelog: v1.2: clarity refractoring + speedup for identical points
            v1.3: new track weighting functions, progress display
            v1.4: new track weighting function, restructuring for memory saving
+           v1.5: algorithm speedup by roughly a factor of 2 by eliminating some cases.
+           v1.6: presets for train etc.
+           v1.7: introduced weighting function for elevation errors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -45,6 +48,8 @@ parser.add_option('-o', '--out', action='store', type='string',
     dest='ofname', default=None, help='Output file name')
 parser.add_option('-m', '--maxsep', action='store', type='float', dest='max_sep',
     default=200.0, help='Maximum separation of points. No points will be deleted where the resulting distance would become greater than maxsep. Standard JOSM settings will not display points spaced more than 200m. Zero value means no limit.')
+parser.add_option('-e', '--ele-weight', action='store', type='float', dest='ele_weight',
+    default=0.3, help='Weighting of elevation errors vs. horizontal errors.')
 parser.add_option('-w', '--weighting', action='store', type='string',
     dest='weighting', default='mix',
     help='''weighting function to be minimized for track reduction:
@@ -53,6 +58,8 @@ sqrdistsum (number of points plus sum of squared distances to leftout points),
 sqrdistmax (number of points plus sum of squared distances to each maximally separated leftout point per new line segment),
 sqrlength (number of points plus sum of squared new line segment lengths normalized by maxsep),
 mix (number of points plus sum of squared distances to each maximally separated leftout point per new line segment weighted with corresponding segment length) = standard''')
+parser.add_option('-a', '--auto', action='store', type='string', dest='auto',
+    default=None, help='Automatic settings for -d and -m for the following means of transport: train, car, bike, foot')
 (options, args) = parser.parse_args()
 
 
@@ -60,7 +67,14 @@ if len(args) < 1:
     parser.print_usage()
     exit(2)
 
-
+if options.auto != None:
+    if options.auto == 'train':
+        options.max_sep = 200.0
+        options.max_dist = 1.5
+        options.ele_weight = 0.0
+    else:
+        print 'no such means of transport available:', options.auto
+    
 # use the WGS-84 ellipsoid
 rE = 6356752.314245 # earth's radius
 a = 6378137.0
@@ -71,13 +85,21 @@ def norm(v):
     return sqrt(sum([i**2 for i in v]))
 
 
-def distance(p1, pm, p2):
+def distance(p1_, pm_, p2_, ele_weight=1.0):
     # returns distance of pm from line between p1 and p2
+
+    p1, pm, p2 = sc.array(p1_), sc.array(pm_), sc.array(p2_)
+    h1, hm, h2 = norm(p1), norm(pm), norm(p2)
+    if ele_weight != 1.0 and min(h1, hm, h2) > 0.0:
+        hmean = (h1 + hm + h2) / 3.0
+        p1 *= (ele_weight + (1.0 - ele_weight) * hmean / h1)
+        pm *= (ele_weight + (1.0 - ele_weight) * hmean / hm)
+        p2 *= (ele_weight + (1.0 - ele_weight) * hmean / h2)
     line = p2 - p1
     linel = norm(line)
     vm = pm - p1
     if linel == 0.0:
-        return norm(vm), 0.5
+        return norm(vm)
     linem = line / linel
     
     position = pl.dot(vm, linem) / linel
@@ -160,23 +182,42 @@ def reduced_track_indices(coordinate_list):
             seglength = norm(p2 - p1)
             if (0.0 < options.max_sep and options.max_sep <= seglength
                     and i1 != i2 - 1):
-                break # point separation is too far
+                # point separation is too far
                 # but always accept direct predecessor i1 = i2 - 1
+                if (options.max_sep + options.max_dist <= seglength):
+                    break
+                else:
+                    continue
             
+            i1_i2_sgment_valid = True
+            lower_i1_possible = True
             distance_squaremax = 0.0
             distance_squaresum = 0.0
             # iterate all medium points between i1 and i2
-            # go through range(i1+1, i2) but start in the middle
-            for im in range((i1-1+i2)/2, i1, -1) + range((i1+1+i2)/2, i2):
+            for im in range(i1+1, i2):
                 pm = sc.array(points[im]['p'])
-                d = distance(p1, pm, p2)
+                d = distance(p1, pm, p2, options.ele_weight)
                 if (d <= options.max_dist):
                     d_sq = (d / options.max_dist) ** 2
                     distance_squaremax = max(distance_squaremax, d_sq)
                     distance_squaresum += points[im]['weight'] * d_sq
                 else:
-                    break
-            else:
+                    i1_i2_sgment_valid = False
+                
+                    # check if connection to any further point i1 is impossible
+                    d1 = pl.dot(p1 - p2, p1 - p2)
+                    d2 = pl.dot(pm - p2, pm - p2)
+                    dd = options.max_dist ** 2
+                    d1d2 = pl.dot(p1 - p2, pm - p2)
+                    # formula from cosines of point separation angle and cone-opening angles around points
+                    if (d1 > dd and d2 > dd and (d1d2 + dd)**2 < (d2 - dd) * (d1 - dd)):
+                        lower_i1_possible = False
+                        break
+                    
+            if (lower_i1_possible == False):
+                break
+            
+            if i1_i2_sgment_valid:
                 if options.weighting == 'sqrdistmax':
                     penalties[i1] = distance_squaremax
                 elif options.weighting == 'sqrdistsum':
