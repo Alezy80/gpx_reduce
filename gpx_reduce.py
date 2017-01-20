@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf8 -*-
+#!/usr/bin/env python2
 
 '''
 gpx_reduce v1.8: removes points from gpx-files to reduce filesize and
@@ -28,6 +27,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
+from __future__ import print_function
 import datetime
 import sys
 import time
@@ -283,12 +283,12 @@ def reduced_track_indices(coordinate_list, timesteps=None):
         if options.verbose == 1 and (100 * i2) / n > progress and time.time() >= tprint + 1:
             tprint = time.time()
             progress = (100 * i2) / n
-            print '\r', progress, '%',
+            print('\r', progress, '%', end='')
             sys.stdout.flush()
             progress_printed = True
     
     if progress_printed:
-        print '\r',
+        print('\r', end='')
     
     # trace route backwards to collect final points
     final_pnums = []
@@ -309,7 +309,7 @@ for fname in args:
     sumx, sumy, sumz = 0.0, 0.0, 0.0
     
     # import xml data from files
-    print 'opening file', fname
+    print('opening file', fname)
     infile = open(fname)
     
     tree = etree.parse(infile)
@@ -332,8 +332,8 @@ for fname in args:
         try:
             times = [datetime.datetime.strptime(trkpt.find(nsmap + 'time'
                                        ).text, timeformat) for trkpt in trkpts]
-        except Exception as e:
-            print e
+        except Exception as ex:
+            print(ex)
             times = None
         
         # save original trackseg for plotting
@@ -353,7 +353,7 @@ for fname in args:
         final_pnums = reduced_track_indices(coords, times)
         
         n_new = len(final_pnums)
-        print 'number of points:', n, '-', n - n_new, '=', n_new
+        print('number of points:', n, '-', n - n_new, '=', n_new)
         
         # delete certain points from original data
         delete_pnums = [i for i in range(n) if i not in final_pnums]
@@ -378,7 +378,7 @@ for fname in args:
     outfile.write(etree.tostring(tree, xml_declaration=True,
         pretty_print=True, encoding='utf-8'))
     outfile.close()
-    print 'modified copy written to', ofname
+    print('modified copy written to', ofname)
     
     
     # plot result to screen
