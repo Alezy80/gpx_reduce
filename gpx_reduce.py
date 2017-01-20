@@ -13,6 +13,9 @@ changelog: v1.2: clarity refractoring + speedup for identical points
            v1.7: introduced weighting function for elevation errors
            v1.8: speed-dependent distance limit
 
+Copyright (C) 2017 Alezy at github.com/Alezy80
+changelog: v1.8.1: adding compact output, allows to strip unneeded tags
+
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
