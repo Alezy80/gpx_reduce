@@ -68,6 +68,8 @@ sqrdistmax (number of points plus sum of squared distances to each maximally sep
 sqrlength (number of points plus sum of squared new line segment lengths normalized by maxsep),
 mix (number of points plus sum of squared distances to each maximally separated leftout point per new line segment weighted with corresponding segment length),
 exp (number of points plus sum of squared distances to leftout points with exponential weighting of 1/2, 1/4, 1/8... from furthest to closest point). exp=standard''')
+parser.add_option('-c', '--compact', action='store_true', dest='compact_output',
+    default=False, help='Makes output file more compact by removing spaces')
 (options, args) = parser.parse_args()
 
 
@@ -329,8 +331,9 @@ def process_file(fname):
     # import xml data from files
     print('opening file', fname)
     infile = open(fname)
-    
-    tree = etree.parse(infile)
+
+    eparser = etree.XMLParser(remove_blank_text=True)
+    tree = etree.parse(infile, eparser)
     infile.close()
     gpx = tree.getroot()
     if None in gpx.nsmap:
@@ -387,13 +390,13 @@ def process_file(fname):
     # export data to file
     if options.ofname != None:
         ofname = options.ofname
-    elif fname.endswith('.gpx'):
+    elif fname.lower().endswith('.gpx'):
         ofname = fname[:-4] + '_reduced.gpx'
     else:
         ofname = fname + '_reduced.gpx'
     outfile = open(ofname, 'w')
     outfile.write(etree.tostring(tree, xml_declaration=True,
-        pretty_print=True, encoding='utf-8'))
+        pretty_print=not options.compact_output, encoding='utf-8'))
     outfile.close()
     print('modified copy written to', ofname)
     
