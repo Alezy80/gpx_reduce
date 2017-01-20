@@ -29,11 +29,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import print_function
 import datetime
-import sys
 import time
 import pylab as pl
 import scipy as sc
 import numpy.linalg as la
+from sys import stdout
 from math import *
 from lxml import etree
 from optparse import OptionParser
@@ -181,7 +181,7 @@ def reduced_track_indices(coordinate_list, timesteps=None):
         penalties = {}
         imin = None
         costmin = float('inf')
-        for i1 in reversed(range(i2)):
+        for i1 in reversed(list(range(i2))):
             p1 = sc.array(points[i1]['p'])
             p2 = sc.array(points[i2]['p'])
             seglength = la.norm(p2 - p1)
@@ -270,7 +270,7 @@ def reduced_track_indices(coordinate_list, timesteps=None):
         # find best predecessor
         imin = None
         costmin = float('inf')
-        for prev, penalty in penalties.iteritems():
+        for prev, penalty in penalties.items():
             # cost function is sum of points used (1.0) plus penalties
             cost = points[prev]['cost'] + 1.0 + penalty
             if cost < costmin:
@@ -284,7 +284,7 @@ def reduced_track_indices(coordinate_list, timesteps=None):
             tprint = time.time()
             progress = (100 * i2) / n
             print('\r', progress, '%', end='')
-            sys.stdout.flush()
+            stdout.flush()
             progress_printed = True
     
     if progress_printed:
@@ -315,7 +315,7 @@ for fname in args:
     tree = etree.parse(infile)
     infile.close()
     gpx = tree.getroot()
-    if gpx.nsmap.has_key(None):
+    if None in gpx.nsmap:
         nsmap = '{' + gpx.nsmap[None] + '}'
     else:
         nsmap = ''
