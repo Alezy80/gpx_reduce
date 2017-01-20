@@ -11,6 +11,9 @@ The script must be saved to a file (gpx_reduce.py) and the executable flag shoul
 
 If the script produces an output that looks non-optimal, this might be because of the third dimension. Otherwise leave me a message.
 
+### Changes from original version
+For now I don't changed any algorithms in the script, but only finetuned output abilities, like adding more compact output, allowing to strip some unwanted tag (i.e. you can anonymize your track time and speed). Also I've made some changes towards make porting to Python 3 more easily.
+
 ### Requirements
 * [python](http://en.wikipedia.org/wiki/Python_(programming_language)) interpreter
 * [scipy](http://www.scipy.org/) scientific tools for python
@@ -21,6 +24,8 @@ On a debian based linux distribution (such as Ubuntu) you can install these with
 ```sh
 sudo apt-get install python python-scipy python-lxml python-matplotlib 
 ```
+
+For Windows users it is more dificult to install theese libraries. If you don't know how to install binary libraries with pip, you're better choice is [Anaconda](https://www.continuum.io/downloads) distro.
 
 ### Algorithm
 
