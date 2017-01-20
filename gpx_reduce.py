@@ -81,7 +81,27 @@ rE = 6356752.314245 # earth's radius
 a = 6378137.0
 b = 6356752.314245179
 
-timeformat = '%Y-%m-%dT%H:%M:%SZ'
+timeformats = ('%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%dT%H:%M:%S.%fZ')
+good_time_format = timeformats[0]
+
+
+def parse_time(str_time):
+    global good_time_format
+    try:
+        return datetime.datetime.strptime(str_time, good_time_format)
+    except ValueError:
+        pass
+
+    ex = None
+    for timeformat in timeformats:
+        try:
+            result = datetime.datetime.strptime(str_time, timeformat)
+            good_time_format = timeformat
+            return result
+        except ValueError as e2:
+            ex = e2
+    if ex is not None:
+        raise ex
 
 
 def distance(p1_, pm_, p2_, ele_weight=1.0):
@@ -300,9 +320,7 @@ def reduced_track_indices(coordinate_list, timesteps=None):
     return [original_indices[i] for i in final_pnums]
 
 
-
-############################## main function #################################
-for fname in args:
+def process_file(fname):
     # initialisations
     tracksegs_old = []
     tracksegs_new = []
@@ -330,8 +348,7 @@ for fname in args:
         lons = [float(trkpt.get('lon')) for trkpt in trkpts]
         eles = [float(trkpt.find(nsmap + 'ele').text) for trkpt in trkpts]
         try:
-            times = [datetime.datetime.strptime(trkpt.find(nsmap + 'time'
-                                       ).text, timeformat) for trkpt in trkpts]
+            times = [parse_time(trkpt.find(nsmap + 'time').text) for trkpt in trkpts]
         except Exception as ex:
             print(ex)
             times = None
@@ -407,3 +424,7 @@ for fname in args:
         pl.xlabel('x [m]')
         pl.ylabel('y [m]')
         pl.show()
+
+
+for file_name in args:
+    process_file(file_name)
