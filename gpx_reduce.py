@@ -70,6 +70,12 @@ mix (number of points plus sum of squared distances to each maximally separated 
 exp (number of points plus sum of squared distances to leftout points with exponential weighting of 1/2, 1/4, 1/8... from furthest to closest point). exp=standard''')
 parser.add_option('-c', '--compact', action='store_true', dest='compact_output',
     default=False, help='Makes output file more compact by removing spaces')
+parser.add_option('--sa', '--strip_all', action='store_true', dest='strip_all',
+    default=False, help='Strip all track point informaton EXCEPT latitude, longitude')
+parser.add_option('-s', '--strip', action='store', type='string', dest='keep_tags',
+    default='***', help='''Strip all track point informaton EXCEPT latitude, longitude AND listed here tags,
+splitted by comma. Generally, you may want to keep elevation (ele) or time (time) tags. If you want to keep it both,
+write option in this way "-s ele,time"''')
 (options, args) = parser.parse_args()
 
 
@@ -77,6 +83,8 @@ if len(args) < 1:
     parser.print_usage()
     exit(2)
 
+if options.keep_tags == '***' and options.strip_all:
+    options.keep_tags = ''
 
 # use the WGS-84 ellipsoid
 rE = 6356752.314245 # earth's radius
@@ -322,6 +330,18 @@ def reduced_track_indices(coordinate_list, timesteps=None):
     return [original_indices[i] for i in final_pnums]
 
 
+def strip_trackpoint_tags(trkpts, nsmap):
+    if options.keep_tags == '***':
+        return
+
+    keep_tag_names = [nsmap + tag_name.strip() for tag_name in options.keep_tags.split(',')]
+
+    for trkpt in trkpts:
+        for child in trkpt:
+            if child.tag not in keep_tag_names:
+                trkpt.remove(child)
+
+
 def process_file(fname):
     # initialisations
     tracksegs_old = []
@@ -385,7 +405,9 @@ def process_file(fname):
             tracksegs_new.append([[float(trkpt.get('lat')),
                 float(trkpt.get('lon')), float(trkpt.find(nsmap + 'ele').text)]
                 for trkpt in trkseg.findall(nsmap + 'trkpt')])
-        
+
+        strip_trackpoint_tags(trkpts, nsmap)
+
     
     # export data to file
     if options.ofname != None:
