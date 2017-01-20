@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf8 -*-
+#!/usr/bin/env python2
 
 '''
 gpx_reduce v1.8: removes points from gpx-files to reduce filesize and
@@ -13,6 +12,9 @@ changelog: v1.2: clarity refractoring + speedup for identical points
            v1.6: presets for train etc.
            v1.7: introduced weighting function for elevation errors
            v1.8: speed-dependent distance limit
+
+Copyright (C) 2017 Alezy at github.com/Alezy80
+changelog: v1.8.1: adding compact output, allows to strip unneeded tags
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,12 +30,13 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
+from __future__ import print_function
 import datetime
-import sys
 import time
 import pylab as pl
 import scipy as sc
 import numpy.linalg as la
+from sys import stdout
 from math import *
 from lxml import etree
 from optparse import OptionParser
@@ -68,6 +71,14 @@ sqrdistmax (number of points plus sum of squared distances to each maximally sep
 sqrlength (number of points plus sum of squared new line segment lengths normalized by maxsep),
 mix (number of points plus sum of squared distances to each maximally separated leftout point per new line segment weighted with corresponding segment length),
 exp (number of points plus sum of squared distances to leftout points with exponential weighting of 1/2, 1/4, 1/8... from furthest to closest point). exp=standard''')
+parser.add_option('-c', '--compact', action='store_true', dest='compact_output',
+    default=False, help='Makes output file more compact by removing spaces')
+parser.add_option('--sa', '--strip_all', action='store_true', dest='strip_all',
+    default=False, help='Strip all track point informaton EXCEPT latitude, longitude')
+parser.add_option('-s', '--strip', action='store', type='string', dest='keep_tags',
+    default='***', help='''Strip all track point informaton EXCEPT latitude, longitude AND listed here tags,
+splitted by comma. Generally, you may want to keep elevation (ele) or time (time) tags. If you want to keep it both,
+write option in this way "-s ele,time"''')
 (options, args) = parser.parse_args()
 
 
@@ -75,13 +86,35 @@ if len(args) < 1:
     parser.print_usage()
     exit(2)
 
+if options.keep_tags == '***' and options.strip_all:
+    options.keep_tags = ''
 
 # use the WGS-84 ellipsoid
 rE = 6356752.314245 # earth's radius
 a = 6378137.0
 b = 6356752.314245179
 
-timeformat = '%Y-%m-%dT%H:%M:%SZ'
+timeformats = ('%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%dT%H:%M:%S.%fZ')
+good_time_format = timeformats[0]
+
+
+def parse_time(str_time):
+    global good_time_format
+    try:
+        return datetime.datetime.strptime(str_time, good_time_format)
+    except ValueError:
+        pass
+
+    ex = None
+    for timeformat in timeformats:
+        try:
+            result = datetime.datetime.strptime(str_time, timeformat)
+            good_time_format = timeformat
+            return result
+        except ValueError as e2:
+            ex = e2
+    if ex is not None:
+        raise ex
 
 
 def distance(p1_, pm_, p2_, ele_weight=1.0):
@@ -181,7 +214,7 @@ def reduced_track_indices(coordinate_list, timesteps=None):
         penalties = {}
         imin = None
         costmin = float('inf')
-        for i1 in reversed(range(i2)):
+        for i1 in reversed(list(range(i2))):
             p1 = sc.array(points[i1]['p'])
             p2 = sc.array(points[i2]['p'])
             seglength = la.norm(p2 - p1)
@@ -270,7 +303,7 @@ def reduced_track_indices(coordinate_list, timesteps=None):
         # find best predecessor
         imin = None
         costmin = float('inf')
-        for prev, penalty in penalties.iteritems():
+        for prev, penalty in penalties.items():
             # cost function is sum of points used (1.0) plus penalties
             cost = points[prev]['cost'] + 1.0 + penalty
             if cost < costmin:
@@ -283,12 +316,12 @@ def reduced_track_indices(coordinate_list, timesteps=None):
         if options.verbose == 1 and (100 * i2) / n > progress and time.time() >= tprint + 1:
             tprint = time.time()
             progress = (100 * i2) / n
-            print '\r', progress, '%',
-            sys.stdout.flush()
+            print('\r', progress, '%', end='')
+            stdout.flush()
             progress_printed = True
     
     if progress_printed:
-        print '\r',
+        print('\r', end='')
     
     # trace route backwards to collect final points
     final_pnums = []
@@ -300,22 +333,33 @@ def reduced_track_indices(coordinate_list, timesteps=None):
     return [original_indices[i] for i in final_pnums]
 
 
+def strip_trackpoint_tags(trkpts, nsmap):
+    if options.keep_tags == '***':
+        return
 
-############################## main function #################################
-for fname in args:
+    keep_tag_names = [nsmap + tag_name.strip() for tag_name in options.keep_tags.split(',')]
+
+    for trkpt in trkpts:
+        for child in trkpt:
+            if child.tag not in keep_tag_names:
+                trkpt.remove(child)
+
+
+def process_file(fname):
     # initialisations
     tracksegs_old = []
     tracksegs_new = []
     sumx, sumy, sumz = 0.0, 0.0, 0.0
     
     # import xml data from files
-    print 'opening file', fname
+    print('opening file', fname)
     infile = open(fname)
-    
-    tree = etree.parse(infile)
+
+    eparser = etree.XMLParser(remove_blank_text=True)
+    tree = etree.parse(infile, eparser)
     infile.close()
     gpx = tree.getroot()
-    if gpx.nsmap.has_key(None):
+    if None in gpx.nsmap:
         nsmap = '{' + gpx.nsmap[None] + '}'
     else:
         nsmap = ''
@@ -330,10 +374,9 @@ for fname in args:
         lons = [float(trkpt.get('lon')) for trkpt in trkpts]
         eles = [float(trkpt.find(nsmap + 'ele').text) for trkpt in trkpts]
         try:
-            times = [datetime.datetime.strptime(trkpt.find(nsmap + 'time'
-                                       ).text, timeformat) for trkpt in trkpts]
-        except Exception as e:
-            print e
+            times = [parse_time(trkpt.find(nsmap + 'time').text) for trkpt in trkpts]
+        except Exception as ex:
+            print(ex)
             times = None
         
         # save original trackseg for plotting
@@ -353,7 +396,7 @@ for fname in args:
         final_pnums = reduced_track_indices(coords, times)
         
         n_new = len(final_pnums)
-        print 'number of points:', n, '-', n - n_new, '=', n_new
+        print('number of points:', n, '-', n - n_new, '=', n_new)
         
         # delete certain points from original data
         delete_pnums = [i for i in range(n) if i not in final_pnums]
@@ -365,20 +408,22 @@ for fname in args:
             tracksegs_new.append([[float(trkpt.get('lat')),
                 float(trkpt.get('lon')), float(trkpt.find(nsmap + 'ele').text)]
                 for trkpt in trkseg.findall(nsmap + 'trkpt')])
-        
+
+        strip_trackpoint_tags(trkpts, nsmap)
+
     
     # export data to file
     if options.ofname != None:
         ofname = options.ofname
-    elif fname.endswith('.gpx'):
+    elif fname.lower().endswith('.gpx'):
         ofname = fname[:-4] + '_reduced.gpx'
     else:
         ofname = fname + '_reduced.gpx'
     outfile = open(ofname, 'w')
     outfile.write(etree.tostring(tree, xml_declaration=True,
-        pretty_print=True, encoding='utf-8'))
+        pretty_print=not options.compact_output, encoding='utf-8'))
     outfile.close()
-    print 'modified copy written to', ofname
+    print('modified copy written to', ofname)
     
     
     # plot result to screen
@@ -407,3 +452,7 @@ for fname in args:
         pl.xlabel('x [m]')
         pl.ylabel('y [m]')
         pl.show()
+
+
+for file_name in args:
+    process_file(file_name)
