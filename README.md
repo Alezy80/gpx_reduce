@@ -12,17 +12,25 @@ The script must be saved to a file (gpx_reduce.py) and the executable flag shoul
 If the script produces an output that looks non-optimal, this might be because of the third dimension. Otherwise leave me a message.
 
 ### Changes from original version
-For now I don't changed any algorithms in the script, but only finetuned output abilities, like adding more compact output, allowing to strip some unwanted tag (i.e. you can anonymize your track time and speed). Also I've made some changes towards make porting to Python 3 more easily.
+For now I don't changed any algorithms in the script, but only added some features:
+* finetuned output abilities, like adding more compact output.
+* allowing to strip some unwanted tag (i.e. you can anonymize your track time and speed)
+* more robust handling files without elevation
+* time parsing conforms to iso8601
+* not only tracks can be reduced, but also routes
+* supports globs in file name
+* I've made some changes towards make porting to Python 3 more easily
 
 ### Requirements
 * [python](http://en.wikipedia.org/wiki/Python_(programming_language)) interpreter
 * [scipy](http://www.scipy.org/) scientific tools for python
-* [lxml](http://lxml.de/) xml library
-* matplotlib
+* [matplotlib](http://matplotlib.org/) 2D plotting library
+* [lxml](https://pypi.python.org/pypi/lxml) xml library
+* [iso8601](http://pypi.python.org/pypi/iso8601) date/time library
 
 On a debian based linux distribution (such as Ubuntu) you can install these with:
 ```sh
-sudo apt-get install python python-scipy python-lxml python-matplotlib 
+sudo apt-get install python python-scipy python-lxml python-matplotlib python-iso8601
 ```
 
 For Windows users it is more dificult to install theese libraries. If you don't know how to install binary libraries with pip, you're better choice is [Anaconda](https://www.continuum.io/downloads) distro.
@@ -40,6 +48,13 @@ Points will never become separated beyond a certain limit (200m by default), sin
 ### Code
 
 See in repo
+
+### Example
+
+```sh
+./gpx_reduce.py -d 10 -n 60 -t 60 -m 1000 -p -2 my_track.gpx
+```
+Removes unnecessary points making new track not farther that 10 meters from original. It you stay still the points are written not more often than once in 60 seconds. The track segments can be up to 1000 meters. The only Latitude and Longitude is retained. In my opinion theese settings are good compromise between accuracy and resulting file size for tracks got by driving, but if you want to draw some footways in forest, it's better to use more conservative settings.
 
 ### License
 ```
