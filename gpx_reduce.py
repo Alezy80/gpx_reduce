@@ -13,11 +13,12 @@ changelog: v1.2: clarity refractoring + speedup for identical points
            v1.7: introduced weighting function for elevation errors
            v1.8: speed-dependent distance limit
 
-Copyright (C) 2017 Alezy at github.com/Alezy80
+Copyright (C) 2017,2018 Alezy at github.com/Alezy80
 changelog: v1.8.1: adding compact output, allows to strip unneeded tags
            v1.8.2: supports processing of tracks and routes, globs in filenames
                    under the Windows too, more robust working, tuned strip
                    options
+           v1.8.3: Faster processing (about 35%).
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -44,7 +45,6 @@ from sys import stdout
 import pylab as pl
 from iso8601 import parse_date
 from lxml import etree
-from numpy.linalg import norm
 from scipy import array, dot
 
 parser = OptionParser('usage: %prog [options] input-file.gpx')
@@ -116,6 +116,18 @@ rE = 6356752.314245  # earth's radius
 a = 6378137.0
 b = 6356752.314245179
 reduced_suffix = '_reduced.gpx'
+
+
+def norm(coords):
+    if len(coords) == 2:
+        return sqrt(coords[0] * coords[0] + coords[1] * coords[1])
+    if len(coords) == 3:
+        return sqrt(coords[0] * coords[0] + coords[1] * coords[1] + coords[2] * coords[2])
+
+    result = 0  # not pythonic way, but much faster than iterator
+    for coord in coords:
+        result += coord * coord
+    return sqrt(result)
 
 
 def distance(p1_, pm_, p2_, ele_weight=1.0):
@@ -319,7 +331,7 @@ def reduced_track_indices(coordinate_list, timesteps=None):
         if options.verbose == 1 and (100 * i2) / n > progress and time.time() >= tprint + 1:
             tprint = time.time()
             progress = (100 * i2) / n
-            print('\r', progress, '%', end='')
+            print('\r', progress, '% of', n, 'points', end='')
             stdout.flush()
             progress_printed = True
 
@@ -463,7 +475,12 @@ def process_file(fname):
 
 
 for file_name in args:
+    start_time = time.time()
+
     for file_name2 in glob.iglob(file_name):
         if reduced_suffix in file_name2 and '*' in file_name:
             continue
         process_file(file_name2)
+
+    end_time = time.time()
+    print('elapsed time=', end_time - start_time)

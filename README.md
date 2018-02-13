@@ -34,6 +34,12 @@ sudo apt-get install python python-scipy python-lxml python-matplotlib python-is
 ```
 
 For Windows users it is more dificult to install theese libraries. If you don't know how to install binary libraries with pip, you're better choice is [Anaconda](https://www.continuum.io/downloads) distro.
+Or you can try to download unofficial binary wheels of [numpy](http://www.lfd.uci.edu/~gohlke/pythonlibs/#numpy) and [scipy](http://www.lfd.uci.edu/~gohlke/pythonlibs/#scipy), open console in folder where theese files are located and execute following commands (fix libraries versions in commands to correct ones):
+```sh
+pip2 install -U numpy-1.13.0+mkl-cp27-cp27m-win32.whl
+pip2 install -U scipy-0.19.1-cp27-cp27m-win32.whl
+pip2 install -U lxml matplotlib iso8601
+```
 
 ### Algorithm
 
