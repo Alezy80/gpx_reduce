@@ -440,7 +440,7 @@ def process_file(fname):
         ofname = fname[:-4] + reduced_suffix
     else:
         ofname = fname + reduced_suffix
-    outfile = open(ofname, 'w')
+    outfile = open(ofname, 'wb')
     outfile.write(etree.tostring(tree, xml_declaration=True,
                                  pretty_print=not options.compact_output, encoding='utf-8'))
     outfile.close()
