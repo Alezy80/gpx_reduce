@@ -23,7 +23,7 @@ For now I don't changed any algorithms in the script, but only added some featur
 
 ### Requirements
 * [python](http://en.wikipedia.org/wiki/Python_(programming_language)) interpreter
-* [scipy](http://www.scipy.org/) scientific tools for python
+* numpy scientific tools for python
 * [matplotlib](http://matplotlib.org/) 2D plotting library
 * [lxml](https://pypi.python.org/pypi/lxml) xml library
 * [iso8601](http://pypi.python.org/pypi/iso8601) date/time library
@@ -33,12 +33,9 @@ On a debian based linux distribution (such as Ubuntu) you can install these with
 sudo apt-get install python python-scipy python-lxml python-matplotlib python-iso8601
 ```
 
-For Windows users it is more dificult to install theese libraries. If you don't know how to install binary libraries with pip, you're better choice is [Anaconda](https://www.continuum.io/downloads) distro.
-Or you can try to download unofficial binary wheels of [numpy](http://www.lfd.uci.edu/~gohlke/pythonlibs/#numpy) and [scipy](http://www.lfd.uci.edu/~gohlke/pythonlibs/#scipy), open console in folder where theese files are located and execute following commands (fix libraries versions in commands to correct ones):
+For Windows users, copy the requirements.txt and run this in your cmd prompt :
 ```sh
-pip2 install -U numpy-1.13.0+mkl-cp27-cp27m-win32.whl
-pip2 install -U scipy-0.19.1-cp27-cp27m-win32.whl
-pip2 install -U lxml matplotlib iso8601
+pip2 install -r requirements.txt
 ```
 
 ### Algorithm
@@ -61,6 +58,14 @@ See in repo
 ./gpx_reduce.py -d 10 -n 60 -t 60 -m 1000 -p -2 my_track.gpx
 ```
 Removes unnecessary points making new track not farther that 10 meters from original. It you stay still the points are written not more often than once in 60 seconds. The track segments can be up to 1000 meters. The only Latitude and Longitude is retained. In my opinion theese settings are good compromise between accuracy and resulting file size for tracks got by driving, but if you want to draw some footways in forest, it's better to use more conservative settings.
+
+For a bike track with an Ultratrac gps mode (Garmin), this seems to work well:
+```sh
+./gpx_reduce.py -d 600 -m 600 -t 50 -4 my_track.gpx
+```
+
+- `-4` keep the elevation values (check help).
+
 
 ### Help
 
