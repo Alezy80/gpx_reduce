@@ -1,0 +1,4 @@
+numpy
+matplotlib
+lxml
+iso8601

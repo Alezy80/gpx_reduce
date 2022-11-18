@@ -1,11 +1,11 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 """
 gpx_reduce v1.8: removes points from gpx-files to reduce filesize and
 tries to keep introduced distortions to the track at a minimum.
 Copyright (C) 2011,2012,2013,2015,2016,2017 travelling_salesman on OpenStreetMap
 
-changelog: v1.2: clarity refractoring + speedup for identical points
+changelog: v1.2: clarity refactoring + speedup for identical points
            v1.3: new track weighting functions, progress display
            v1.4: new track weighting function, restructuring for memory saving
            v1.5: algorithm speedup by roughly a factor of 2 by eliminating some cases.
@@ -13,12 +13,13 @@ changelog: v1.2: clarity refractoring + speedup for identical points
            v1.7: introduced weighting function for elevation errors
            v1.8: speed-dependent distance limit
 
-Copyright (C) 2017,2018 Alezy at github.com/Alezy80
+Copyright (C) 2017,2018,2022 Alezy and other contributors at github.com/Alezy80
 changelog: v1.8.1: adding compact output, allows to strip unneeded tags
            v1.8.2: supports processing of tracks and routes, globs in filenames
                    under the Windows too, more robust working, tuned strip
                    options
            v1.8.3: Faster processing (about 35%).
+           v1.8.4: moving to Python 3
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -38,14 +39,14 @@ from __future__ import print_function
 
 import glob
 import time
-from math import *
+from math import sin, cos, atan2, radians, degrees, sqrt, pi
 from optparse import OptionParser, OptionGroup
 from sys import stdout
 
 import pylab as pl
 from iso8601 import parse_date
 from lxml import etree
-from scipy import array, dot
+from numpy import array, dot
 
 parser = OptionParser('usage: %prog [options] input-file.gpx')
 parser.add_option('-v', '--verbose', action='store', type='int',
@@ -217,9 +218,9 @@ def reduced_track_indices(coordinate_list, timesteps=None):
             points[-1]['weight'] += 1
     n = len(points)
 
-    # progress printing initialisations
+    # progress printing initializations
     progress_printed = False
-    progress = None
+    progress = 0
     tprint = time.time()
 
     # execute Dijkstra-like algorithm on points
@@ -331,7 +332,7 @@ def reduced_track_indices(coordinate_list, timesteps=None):
         if options.verbose == 1 and (100 * i2) / n > progress and time.time() >= tprint + 1:
             tprint = time.time()
             progress = (100 * i2) / n
-            print('\r', progress, '% of', n, 'points', end='')
+            print('\r{0:6.2f} % of {1} points'.format(progress, n), end='')
             stdout.flush()
             progress_printed = True
 
@@ -375,7 +376,7 @@ def process_file(fname):
 
     # import xml data from files
     print('opening file', fname)
-    infile = open(fname)
+    infile = open(fname, 'rb')
 
     eparser = etree.XMLParser(remove_blank_text=True)
     tree = etree.parse(infile, eparser)
@@ -448,7 +449,7 @@ def process_file(fname):
 
     # plot result to screen
     if options.plot:
-        latm, lonm, elesum = xyz_to_latlonele(sumx, sumy, sumz)
+        latm, lonm, _ = xyz_to_latlonele(sumx, sumy, sumz)
 
         for trkseg in tracksegs_old:
             y_old = []
@@ -483,4 +484,4 @@ for file_name in args:
         process_file(file_name2)
 
     end_time = time.time()
-    print('elapsed time=', end_time - start_time)
+    print('elapsed time={0:5.3f}'.format(end_time - start_time))
