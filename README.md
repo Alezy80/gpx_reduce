@@ -62,6 +62,70 @@ See in repo
 ```
 Removes unnecessary points making new track not farther that 10 meters from original. It you stay still the points are written not more often than once in 60 seconds. The track segments can be up to 1000 meters. The only Latitude and Longitude is retained. In my opinion theese settings are good compromise between accuracy and resulting file size for tracks got by driving, but if you want to draw some footways in forest, it's better to use more conservative settings.
 
+### Help
+
+```sh
+Usage: gpx_reduce.py [options] input-file.gpx
+
+Options:
+  -h, --help            show this help message and exit
+  -v VERBOSE, --verbose=VERBOSE
+                        verbose=[0,1]
+  -p, --plot            Show a plot of the result at the end.
+  -d MAX_DIST, --dist=MAX_DIST
+                        Maximum distance of line from original points in
+                        meters
+  -o OFNAME, --out=OFNAME
+                        Output file name
+  -m MAX_SEP, --maxsep=MAX_SEP
+                        Absolute maximum separation of points. No points will
+                        be deleted where the resulting distance would become
+                        greater than maxsep. Standard JOSM settings will not
+                        display points spaced more than 200m. -1 means no
+                        limit.
+  -n MAX_SEP0, --maxsep0=MAX_SEP0
+                        Maximum separation of points at zero speed.
+  -t MAX_SEP_TIME, --maxseptime=MAX_SEP_TIME
+                        Maximum time separation of points, which will be added
+                        to maxsep0. Maximum allowed point separation will be
+                        min(m, n + t*v) where v is the speed in m/s.
+  -e ELE_WEIGHT, --ele-weight=ELE_WEIGHT
+                        Weighting of elevation errors vs. horizontal errors.
+                        Default is 0.
+  -b BEND, --bend=BEND  Penalty value for large bending angles at each
+                        trackpoint. Larger values (1 or more) make the track
+                        smoother.
+  -w WEIGHTING, --weighting=WEIGHTING
+                        Weighting function to be minimized for track
+                        reduction: pnum (number of points), sqrdistsum (number
+                        of points plus sum of squared distances to leftout
+                        points), sqrdistmax (number of points plus sum of
+                        squared distances to each maximally separated leftout
+                        point per new line segment), sqrlength (number of
+                        points plus sum of squared new line segment lengths
+                        normalized by maxsep), mix (number of points plus sum
+                        of squared distances to each maximally separated
+                        leftout point per new line segment weighted with
+                        corresponding segment length), exp (number of points
+                        plus sum of squared distances to leftout points with
+                        exponential weighting of 1/2, 1/4, 1/8... from
+                        furthest to closest point). exp=standard
+
+  Strip sensitive info, You can remove unwanted info from trackpoints, but it does not remove any metadata! All options will always retain latitude and longitude:
+    -c, --compact       Makes output file more compact by removing spaces
+                        (pretty_print=false)
+    -2                  Retain only latitude, longitude
+    -3                  Retain only latitude, longitude, elevation
+    -4                  Retain only latitude, longitude, ele and time
+    -s KEEP_TAGS, --strip=KEEP_TAGS
+                        Strip all track point informaton EXCEPT listed here
+                        tags, splitted by comma. Generally, you may want to
+                        keep elevation (ele) or time (time) tags. If you want
+                        to keep it both, write option in this way "-s
+                        ele,time"
+```
+
+
 ### License
 ```
 This program is free software: you can redistribute it and/or modify

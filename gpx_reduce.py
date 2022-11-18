@@ -45,7 +45,7 @@ from sys import stdout
 import pylab as pl
 from iso8601 import parse_date
 from lxml import etree
-from scipy import array, dot
+from numpy import array, dot
 
 parser = OptionParser('usage: %prog [options] input-file.gpx')
 parser.add_option('-v', '--verbose', action='store', type='int',
@@ -328,12 +328,12 @@ def reduced_track_indices(coordinate_list, timesteps=None):
         points[i2]['prev'] = imin
 
         # print progess
-        if options.verbose == 1 and (100 * i2) / n > progress and time.time() >= tprint + 1:
-            tprint = time.time()
-            progress = (100 * i2) / n
-            print('\r', progress, '% of', n, 'points', end='')
-            stdout.flush()
-            progress_printed = True
+        # if options.verbose == 1 and (100 * i2) / n > progress and time.time() >= tprint + 1:
+            # tprint = time.time()
+            # progress = (100 * i2) / n
+            # print('\r', progress, '% of', n, 'points', end='')
+            # stdout.flush()
+            # progress_printed = True
 
     if progress_printed:
         print('\r', end='')
