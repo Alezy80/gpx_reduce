@@ -1,1 +1,4 @@
 /.idea/
+# Virtual environments
+.venv
+uv.lock

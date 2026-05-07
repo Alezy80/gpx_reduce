@@ -8,6 +8,10 @@ The script must be saved to a file (gpx_reduce.py) and the executable flag shoul
 ```sh
 ./gpx_reduce.py --help
 ```
+or with **uv**
+```sh
+uv run gpx_reduce.py --help
+```
 
 If the script produces an output that looks non-optimal, this might be because of the third dimension. Otherwise leave me a message.
 
@@ -22,6 +26,13 @@ For now I don't changed any algorithms in the script, but only added some featur
 * I've made some changes towards make porting to Python 3 more easily
 
 ### Requirements
+
+The simplest way to run the script is to use [uv](https://docs.astral.sh/uv/) package manager. Just run with command
+```sh
+uv run gpx_reduce.py input-file-name.gpx
+```
+
+You can also install dependencies by hands. All you need:
 * [python](http://en.wikipedia.org/wiki/Python_(programming_language)) interpreter
 * [numpy](https://numpy.org/) the fundamental package for scientific computing with Python
 * [matplotlib](http://matplotlib.org/) 2D plotting library
@@ -57,6 +68,11 @@ See in repo
 ```sh
 ./gpx_reduce.py -d 10 -n 60 -t 60 -m 1000 -p -2 my_track.gpx
 ```
+or
+```sh
+uv run gpx_reduce.py -d 10 -n 60 -t 60 -m 1000 -p -2 my_track.gpx
+```
+
 Removes unnecessary points making new track not farther that 10 meters from original. It you stay still the points are written not more often than once in 60 seconds. The track segments can be up to 1000 meters. The only Latitude and Longitude is retained. In my opinion theese settings are good compromise between accuracy and resulting file size for tracks got by driving, but if you want to draw some footways in forest, it's better to use more conservative settings.
 
 For a bike track with an Ultratrac gps mode (Garmin), this seems to work well:
